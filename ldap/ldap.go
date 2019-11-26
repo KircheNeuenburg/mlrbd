@@ -42,7 +42,7 @@ func StopLDAP() {
 	}
 }
 
-func GetLDAPGroups() (lg []string, err error) {
+func LDAPGroups() (lg []string, err error) {
 	searchRequest := ldap.NewSearchRequest(
 		c.Ldap.GroupBaseDn,
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
@@ -58,7 +58,7 @@ func GetLDAPGroups() (lg []string, err error) {
 	return
 }
 
-func GetLdapGroupName(uuid string) (n string) {
+func LdapGroupName(uuid string) (n string) {
 	filter := "(&(" + c.Ldap.GroupUniqueIdentifier + "=" + uuid + ")(" + c.Ldap.GroupFilter + "))"
 	searchRequest := ldap.NewSearchRequest(
 		c.Ldap.GroupBaseDn,
@@ -75,7 +75,7 @@ func GetLdapGroupName(uuid string) (n string) {
 	return
 }
 
-func GetLdapUserId(memberAttr string) (n string) {
+func LdapUserId(memberAttr string) (n string) {
 	filter := "(&(" + c.Ldap.GroupMemberAttribute + "=" + memberAttr + ")" + c.Ldap.UserFilter + ")"
 	searchRequest := ldap.NewSearchRequest(
 		c.Ldap.UserBaseDn,
@@ -92,11 +92,11 @@ func GetLdapUserId(memberAttr string) (n string) {
 	return
 }
 
-func GetLdapUsers(lg string) (lu []string, err error) {
+func LdapUsers(lg string) (lu []string, err error) {
 	filter := "(&(" + c.Ldap.GroupUniqueIdentifier + "=" + lg + ")" + c.Ldap.GroupFilter + ")"
 	searchRequest := ldap.NewSearchRequest(
 		c.Ldap.GroupBaseDn,
-		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false, 
+		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
 		filter, []string{c.Ldap.GroupMemberAssociation}, nil,
 	)
 	sr, err := l.Search(searchRequest)
@@ -108,7 +108,7 @@ func GetLdapUsers(lg string) (lu []string, err error) {
 		users = sr.Entries[0].GetAttributeValues(c.Ldap.GroupMemberAssociation)
 	}
 	for _, u := range users {
-		if id := GetLdapUserId(u); id != "" {
+		if id := LdapUserId(u); id != "" {
 			lu = append(lu, id)
 		}
 	}

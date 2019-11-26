@@ -2,24 +2,26 @@ package main
 
 import (
 	"database/sql"
-	"fmt"
 	"log"
-	//	"maunium.net/go/mautrix"
 	"mlrbd/config"
-	"mlrbd/db"
+	"mlrbd/database"
 	"mlrbd/ldap"
 	"mlrbd/matrix"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 )
 
 var (
-	dbc  *sql.DB
+	db   *sql.DB
 	conf *config.Config
 )
 
 func main() {
 	var err error
 	conf, err = config.LoadConfigFromFile(nil, "")
-	dbc, err = db.NewConnectionPool(
+	db, err = database.NewConnectionPool(
 		conf.Db.Connection,
 		1,
 		5,
@@ -27,15 +29,48 @@ func main() {
 	if err != nil {
 		log.Fatal("Unable to connect to the database: %v", err)
 	}
-	defer dbc.Close()
+	defer db.Close()
+
+	database.Migrate(db)
 
 	matrix.StartMatrix(conf)
 	ldap.StartLDAP(conf)
-	lg_act, err := ldap.GetLDAPGroups()
+
+	sync()
+
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt)
+	signal.Notify(stop, syscall.SIGTERM)
+	ticker := time.NewTicker(time.Duration(conf.General.SyncInterval) * time.Minute)
+	done := make(chan bool)
+	endsync := make(chan bool)
+
+	go func() {
+		for {
+			select {
+			case <-done:
+				endsync <- true
+				return
+			case <-ticker.C:
+				sync()
+			}
+		}
+	}()
+
+	<-stop
+	ticker.Stop()
+	done <- true
+	<-endsync
+	log.Println("Ticker stopped")
+	ldap.StopLDAP()
+}
+
+func sync() {
+	lg_act, err := ldap.LDAPGroups()
 	if err != nil {
 		log.Fatal(err)
 	}
-	lg_curr, err := db.GetDbGroups(dbc)
+	lg_curr, err := database.DbGroups(db)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -44,13 +79,14 @@ func main() {
 	handleCurrentGroups(Intersect(lg_curr, lg_act))
 	handleRemovedGroups(Diff(lg_act, lg_curr))
 
-	mr_act, err := db.GetDbRooms(dbc)
-	if err != nil {
-		log.Fatal(err)
+	if conf.General.KeepRooms == false {
+		mr_act, err := database.DbRooms(db)
+		if err != nil {
+			log.Fatal(err)
+		}
+		mr_curr, _ := matrix.MatrixRooms()
+		handleCleanedRooms(Diff(mr_act, mr_curr))
 	}
-	mr_curr, _ := matrix.GetMatrixRooms()
-	handleCleanedRooms(Diff(mr_act, mr_curr))
-	ldap.StopLDAP()
 }
 
 func Intersect(a []string, b []string) (set []string) {
@@ -86,25 +122,28 @@ func Diff(a []string, b []string) (diff []string) {
 }
 
 func handleRemovedGroups(lg []string) {
-	stmt_sel, err := dbc.Prepare("SELECT matrix_room FROM group_mapping WHERE ldap_group = $1 LIMIT 1")
+	stmt_sel, err := db.Prepare("SELECT matrix_room FROM room_group_map WHERE ldap_group = $1 LIMIT 1")
 	defer stmt_sel.Close()
 	if err != nil {
 		log.Fatal(err)
 	}
-	stmt_del, err := dbc.Prepare("DELETE FROM group_mapping WHERE ldap_group = $1")
+	stmt_del, err := db.Prepare("DELETE FROM room_group_map WHERE ldap_group = $1")
 	defer stmt_del.Close()
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	for _, s := range lg {
-		fmt.Println("Remove Group ", s)
+		log.Println("Remove Group ", s)
 		row := stmt_sel.QueryRow(s)
 		var rid string
 		if err := row.Scan(&rid); err != nil {
 			log.Fatal(err)
 		}
-		matrix.DeleteMatrixRoom(rid)
+		if conf.General.KeepRooms == false {
+			log.Println("Do not keep room ", rid)
+			matrix.DeleteMatrixRoom(rid)
+		}
 		_, err = stmt_del.Exec(s)
 		if err != nil {
 			log.Fatal(err)
@@ -114,35 +153,38 @@ func handleRemovedGroups(lg []string) {
 
 func handleCleanedRooms(mr []string) {
 	for _, rid := range mr {
-		fmt.Println("Cleanup Room ", rid)
+		log.Println("Cleanup Room ", rid)
 		matrix.DeleteMatrixRoom(rid)
 	}
 }
 
 func handleCreatedGroups(lg []string) {
-	stmt, err := dbc.Prepare("INSERT INTO group_mapping(ldap_group,matrix_room) VALUES($1, $2)")
+	stmt, err := db.Prepare("INSERT INTO room_group_map(ldap_group,matrix_room) VALUES($1, $2)")
 	defer stmt.Close()
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	for _, s := range lg {
-		n := ldap.GetLdapGroupName(s)
+		n := ldap.LdapGroupName(s)
 		rid := matrix.CreateMatrixRoom(n)
-		fmt.Println("Create Group ", n)
+		log.Println("Create Group ", n)
 		if _, err := stmt.Exec(s, rid); err != nil {
 			log.Fatal(err)
 		}
-		lu, err := convertToMxid(ldap.GetLdapUsers(s))
+		lu, err := convertToMxid(ldap.LdapUsers(s))
 		if err != nil {
 			log.Fatal(err)
 		}
 		matrix.HandleCreatedUsers(rid, lu)
+		if conf.Matrix.E2eEncryption == true {
+			matrix.EnableEncryption(rid)
+		}
 	}
 }
 
 func handleCurrentGroups(lg []string) {
-	stmt, err := dbc.Prepare("SELECT matrix_room FROM group_mapping WHERE ldap_group = $1 LIMIT 1")
+	stmt, err := db.Prepare("SELECT matrix_room FROM room_group_map WHERE ldap_group = $1 LIMIT 1")
 	defer stmt.Close()
 	if err != nil {
 		log.Fatal(err)
@@ -155,11 +197,11 @@ func handleCurrentGroups(lg []string) {
 		if err := row.Scan(&rid); err != nil {
 			log.Fatal(err)
 		}
-		lu, err := convertToMxid(ldap.GetLdapUsers(s))
+		lu, err := convertToMxid(ldap.LdapUsers(s))
 		if err != nil {
 			log.Fatal(err)
 		}
-		mu := matrix.GetMatrixUsers(rid)
+		mu := matrix.MatrixUsers(rid)
 
 		matrix.HandleCreatedUsers(rid, Diff(mu, lu))
 		matrix.HandleRemovedUsers(rid, Diff(lu, mu))

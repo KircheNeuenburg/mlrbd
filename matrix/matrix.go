@@ -56,7 +56,7 @@ func DeleteMatrixRoom(rid string) {
 	}
 	for _, u := range resp.Chunk {
 		if u.UserId != c.Matrix.Mxid && (u.Content.Membership == "join" || u.Content.Membership == "invite") {
-			req := mautrix.ReqKickUser{UserID: u.UserId}
+			req := mautrix.ReqKickUser{UserID: u.UserId, Reason: c.Matrix.KickMessage}
 			_, err := m.KickUser(rid, &req)
 			if err != nil {
 				log.Fatal(err)
@@ -66,7 +66,7 @@ func DeleteMatrixRoom(rid string) {
 	m.LeaveRoom(rid)
 }
 
-func GetMatrixUsers(rid string) (mu []string) {
+func MatrixUsers(rid string) (mu []string) {
 	u := m.BuildURL("rooms", rid, "members")
 	resp := struct {
 		Chunk []struct {
@@ -103,7 +103,7 @@ func HandleCreatedUsers(rid string, mu []string) {
 }
 func HandleRemovedUsers(rid string, mu []string) {
 	for _, u := range mu {
-		req := mautrix.ReqKickUser{UserID: u}
+		req := mautrix.ReqKickUser{UserID: u, Reason: c.Matrix.KickMessage}
 		_, err := m.KickUser(rid, &req)
 		if err != nil {
 			log.Fatal(err)
@@ -114,7 +114,7 @@ func HandleRemovedUsers(rid string, mu []string) {
 	return
 }
 
-func EnableMatrixEncryption(rid string) {
+func EnableEncryption(rid string) {
 	u := m.BuildURL("rooms", rid, "state", "m.room.encryption")
 	req := struct {
 		Algorithm string `json:"algorithm"`
@@ -127,7 +127,7 @@ func EnableMatrixEncryption(rid string) {
 	return
 }
 
-func GetMatrixRooms() (mr []string, err error) {
+func MatrixRooms() (mr []string, err error) {
 	resp, err := m.JoinedRooms()
 	if err != nil {
 		log.Fatal(err)

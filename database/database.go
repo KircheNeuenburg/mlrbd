@@ -1,4 +1,4 @@
-package db
+package database
 
 import (
 	"database/sql"
@@ -20,8 +20,8 @@ func NewConnectionPool(dsn string, minConnections, maxConnections int) (*sql.DB,
 	return db, nil
 }
 
-func GetDbGroups(db *sql.DB) (dg []string, err error) {
-	sel := "SELECT ldap_group FROM group_mapping"
+func DbGroups(db *sql.DB) (dg []string, err error) {
+	sel := "SELECT ldap_group FROM room_group_map"
 	var lg_rows *sql.Rows
 	lg_rows, err = db.Query(sel)
 	if err != nil {
@@ -37,8 +37,8 @@ func GetDbGroups(db *sql.DB) (dg []string, err error) {
 	return
 }
 
-func GetDbRooms(db *sql.DB) (dr []string, err error) {
-	sel := "SELECT matrix_room FROM group_mapping"
+func DbRooms(db *sql.DB) (dr []string, err error) {
+	sel := "SELECT matrix_room FROM room_group_map"
 	var mr_rows *sql.Rows
 	mr_rows, err = db.Query(sel)
 	if err != nil {
