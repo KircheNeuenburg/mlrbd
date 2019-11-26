@@ -29,7 +29,7 @@ func StartMatrix(conf *config.Config) {
 func CreateMatrixRoom(n string) string {
 	req := mautrix.ReqCreateRoom{
 		Visibility: "private",
-		Name:       n,
+		Name:       n + c.Matrix.RoomSuffix,
 		Preset:     "private_chat",
 	}
 	resp, err := m.CreateRoom(&req)
@@ -127,6 +127,18 @@ func EnableEncryption(rid string) {
 	return
 }
 
+func SetRoomName(rid string, n string) {
+	u := m.BuildURL("rooms", rid, "state", "m.room.name")
+	req := struct {
+		Name string `json:"name"`
+	}{}
+	req.Name = n + c.Matrix.RoomSuffix
+	_, err := m.MakeRequest("PUT", u, &req, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return
+}
 func MatrixRooms() (mr []string, err error) {
 	resp, err := m.JoinedRooms()
 	if err != nil {

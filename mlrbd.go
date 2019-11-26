@@ -205,6 +205,7 @@ func handleCurrentGroups(lg []string) {
 
 		matrix.HandleCreatedUsers(rid, Diff(mu, lu))
 		matrix.HandleRemovedUsers(rid, Diff(lu, mu))
+		matrix.SetRoomName(rid, ldap.LdapGroupName(s))
 	}
 }
 

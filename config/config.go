@@ -37,6 +37,7 @@ type MatrixConfig struct {
 	Mxid          string `ini:"mxid"`
 	AccessToken   string `ini:"access-token"`
 	KickMessage   string `ini:"kick-message"`
+	RoomSuffix    string `ini:"room-suffix"`
 }
 
 type Config struct {
