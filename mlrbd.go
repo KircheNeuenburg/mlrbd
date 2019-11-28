@@ -190,7 +190,6 @@ func handleCurrentGroups(lg []string) {
 		log.Fatal(err)
 	}
 
-	log.Println("Syncing Groups")
 	for _, s := range lg {
 		row := stmt.QueryRow(s)
 		var rid string
