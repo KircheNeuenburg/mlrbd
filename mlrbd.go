@@ -77,9 +77,10 @@ func sync() {
 
 	handleCreatedGroups(Diff(lg_curr, lg_act))
 	handleCurrentGroups(Intersect(lg_curr, lg_act))
-	handleRemovedGroups(Diff(lg_act, lg_curr))
 
 	if conf.General.KeepRooms == false {
+		handleRemovedGroups(Diff(lg_act, lg_curr))
+
 		mr_act, err := database.DbRooms(db)
 		if err != nil {
 			log.Fatal(err)
@@ -135,16 +136,24 @@ func handleRemovedGroups(lg []string) {
 
 	for _, s := range lg {
 		log.Println("Remove Group ", s)
-		row := stmt_sel.QueryRow(s)
+		tx, err := db.Begin()
+		defer tx.Rollback()
+		if err != nil {
+			log.Fatal(err)
+		}
+		row := tx.Stmt(stmt_sel).QueryRow(s)
 		var rid string
 		if err := row.Scan(&rid); err != nil {
 			log.Fatal(err)
 		}
-		if conf.General.KeepRooms == false {
-			log.Println("Do not keep room ", rid)
-			matrix.DeleteMatrixRoom(rid)
+		
+		matrix.DeleteMatrixRoom(rid)
+		
+		_, err = tx.Stmt(stmt_del).Exec(s)
+		if err != nil {
+			log.Fatal(err)
 		}
-		_, err = stmt_del.Exec(s)
+		err = tx.Commit()
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -166,10 +175,15 @@ func handleCreatedGroups(lg []string) {
 	}
 
 	for _, s := range lg {
+		tx, err := db.Begin()
+		defer tx.Rollback()
+		if err != nil {
+			log.Fatal(err)
+		}
 		n := ldap.LdapGroupName(s)
 		rid := matrix.CreateMatrixRoom(n)
 		log.Println("Create Group ", n)
-		if _, err := stmt.Exec(s, rid); err != nil {
+		if _, err := tx.Stmt(stmt).Exec(s, rid); err != nil {
 			log.Fatal(err)
 		}
 		lu, err := convertToMxid(ldap.LdapUsers(s))
@@ -180,6 +194,11 @@ func handleCreatedGroups(lg []string) {
 		if conf.Matrix.E2eEncryption == true {
 			matrix.EnableEncryption(rid)
 		}
+		err = tx.Commit()
+		if err != nil {
+			log.Fatal(err)
+		}
+		
 	}
 }
 
