@@ -1,0 +1,22 @@
+image: alpine/edge
+packages:
+- go
+- scdoc
+sources:
+- https://git.sr.ht/~davidlang/mlrbd
+- https://git.sr.ht/~sircmpwn/annotatego
+secrets:
+- cda982aa-5cf1-4ba6-b3f8-0b321e4d52d7
+shell: true 
+tasks:
+- mlrbd: |
+    cd mlrbd
+    make
+- annotatego: |
+    cd annotatego
+    go build
+    sudo cp annotatego /usr/bin/
+- annotate: |
+    cd mlrbd
+    annotatego -v . > annotations.json
+    ~/upload-annotations annotations.json davidlang mlrbd
