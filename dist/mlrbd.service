@@ -1,0 +1,13 @@
+[Unit]
+Description=mlrbd - matrix ldap room bot daemon
+After=network.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/mlrbd.conf
+User=mlrbd
+ExecStart=/usr/bin/mlrbd
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
