@@ -7,7 +7,6 @@ sources:
 - https://git.sr.ht/~sircmpwn/annotatego
 secrets:
 - cda982aa-5cf1-4ba6-b3f8-0b321e4d52d7
-shell: true 
 tasks:
 - mlrbd: |
     cd mlrbd
