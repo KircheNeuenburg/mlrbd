@@ -2,7 +2,7 @@ package config
 
 import (
 	"github.com/go-ini/ini"
-	"github.com/kyoh86/xdg"
+	"log"
 	"path"
 )
 
@@ -73,8 +73,9 @@ func (config *Config) LoadConfig(file *ini.File) error {
 
 func LoadConfigFromFile(root *string, sharedir string) (*Config, error) {
 	if root == nil {
-		_root := path.Join(xdg.ConfigHome(), "mlrbd")
+		_root := path.Join("/etc", "mlrbd")
 		root = &_root
+		log.Println(root)
 	}
 	filename := path.Join(*root, "mlrbd.conf")
 	file, err := ini.Load(filename)
